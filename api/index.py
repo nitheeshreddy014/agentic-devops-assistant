@@ -40,40 +40,41 @@ logger = get_logger(__name__)
 _EXECUTOR = ThreadPoolExecutor(max_workers=3)
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
+# ── Lazy graph singleton (Vercel serverless-compatible) ──────────────────────
+# Vercel does NOT call FastAPI lifespan events — graphs must be built lazily.
+
+_initial_graph      = None
+_continuation_graph = None
+_graph_lock         = asyncio.Lock()
+
+configure_logging(settings.log_level)
+
+
+async def _ensure_graphs():
+    """Build LangGraph workflows once and cache at module level."""
+    global _initial_graph, _continuation_graph
+    if _initial_graph is not None:
+        return
+    async with _graph_lock:
+        if _initial_graph is not None:
+            return
+        llm = get_llm()
+        if llm is None:
+            logger.warning("GROQ_API_KEY not set — AI agents disabled.")
+        try:
+            _initial_graph      = build_initial_graph(llm)
+            _continuation_graph = build_continuation_graph(llm)
+            logger.info("LangGraph workflows compiled OK")
+        except Exception as exc:
+            logger.error(f"LangGraph compilation failed: {exc}", exc_info=True)
+            _initial_graph      = None
+            _continuation_graph = None
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    configure_logging(settings.log_level)
-    logger.info("🚀 Agentic DevOps Assistant starting up")
-
-    # BM25 runbook index (no embedding API required)
-    retriever = get_retriever()
-    logger.info(f"BM25 index ready: {retriever.chunk_count} runbook chunks from {retriever._dir}")
-
-    # LLM (None when no API key — app degrades gracefully)
-    llm = get_llm()
-    if llm is None:
-        logger.warning(
-            "LLM not configured — AI agents disabled. "
-            "Set GROQ_API_KEY to enable AI-powered analysis."
-        )
-    else:
-        logger.info(f"LLM ready: provider={settings.llm_provider}, model={settings.llm_model}")
-
-    # LangGraph compiled workflows
-    try:
-        application.state.initial_graph      = build_initial_graph(llm)
-        application.state.continuation_graph = build_continuation_graph(llm)
-        logger.info("LangGraph workflows compiled ✓")
-    except Exception as exc:
-        logger.error(f"LangGraph compilation failed: {exc}", exc_info=True)
-        application.state.initial_graph      = None
-        application.state.continuation_graph = None
-
+    await _ensure_graphs()
     yield
-
-    logger.info("Application shutdown")
     _EXECUTOR.shutdown(wait=False)
 
 
@@ -210,7 +211,8 @@ async def start_investigation(request: Request):
     logs_redacted   = redact_secrets(raw_logs)
     config_redacted = redact_secrets(raw_config)
 
-    graph = getattr(request.app.state, "initial_graph", None)
+    await _ensure_graphs()
+    graph = _initial_graph
     if graph is None:
         raise HTTPException(status_code=503, detail="Investigation graph not ready. Retry in a moment.")
 
@@ -261,7 +263,8 @@ async def continue_investigation(request: Request):
     state["iteration"]               = int(state.get("iteration", 1)) + 1
     state["request_id"]              = req_id
 
-    graph = getattr(request.app.state, "continuation_graph", None)
+    await _ensure_graphs()
+    graph = _continuation_graph
     if graph is None:
         raise HTTPException(status_code=503, detail="Continuation graph not ready.")
 
