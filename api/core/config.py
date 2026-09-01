@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     openrouter_api_key: Optional[str] = Field(default=None, alias="OPENROUTER_API_KEY")
 
     llm_provider: str = Field(default="groq", alias="LLM_PROVIDER")
-    llm_model: str = Field(default="llama-3.3-70b-versatile", alias="LLM_MODEL")
+    llm_model: str = Field(default="llama3-70b-8192", alias="LLM_MODEL")
 
     # Groq-specific rate-limit retry
     groq_max_retries: int = Field(default=3, alias="GROQ_MAX_RETRIES")
