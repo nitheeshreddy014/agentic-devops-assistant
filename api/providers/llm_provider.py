@@ -50,14 +50,48 @@ def get_llm(temperature: float = 0.1) -> Optional[BaseChatModel]:
 def _build_groq(settings, temperature: float) -> BaseChatModel:
     from langchain_groq import ChatGroq  # type: ignore[import]
 
-    logger.info("Initialising Groq LLM", extra={"model": settings.llm_model})
-    return ChatGroq(
-        groq_api_key=settings.groq_api_key,
-        model_name=settings.llm_model,
-        temperature=temperature,
-        max_retries=settings.groq_max_retries,
-        # request_timeout handled by Groq SDK internally
-    )
+    # Try models in order of preference - fallback if one is unavailable
+    models_to_try = [
+        settings.llm_model,
+        "llama3-70b-8192",
+        "llama-3.1-70b-versatile",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma-7b-it",
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    models_to_try = [m for m in models_to_try if m and not (m in seen or seen.add(m))]
+
+    last_exc = None
+    for model in models_to_try:
+        try:
+            logger.info(f"Trying Groq model: {model}")
+            llm = ChatGroq(
+                groq_api_key=settings.groq_api_key,
+                model_name=model,
+                temperature=temperature,
+                max_retries=1,
+            )
+            # Quick test to verify model is accessible
+            llm.invoke([{"role": "user", "content": "hi"}])
+            logger.info(f"Groq model ready: {model}")
+            return ChatGroq(
+                groq_api_key=settings.groq_api_key,
+                model_name=model,
+                temperature=temperature,
+                max_retries=settings.groq_max_retries,
+            )
+        except Exception as exc:
+            err = str(exc)
+            if "404" in err or "does not exist" in err or "not have access" in err:
+                logger.warning(f"Model {model} not available, trying next...")
+                last_exc = exc
+                continue
+            # Other errors (auth, network) - raise immediately
+            raise
+
+    raise RuntimeError(f"No Groq models available. Last error: {last_exc}")
 
 
 # ── Google Gemini (optional) ─────────────────────────────────────────────────
