@@ -1,5 +1,5 @@
 'use client';
-interface Props { report: Record<string, unknown> }
+interface Props { report: Record<string, any> }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -31,7 +31,7 @@ export default function FinalReport({ report }: Props) {
 
       <h2 className="text-base font-bold text-white mb-4">{String(report.title ?? '')}</h2>
 
-      {report.executive_summary && (
+      {report.executive_summary ? (
         <Section title="Executive Summary">
           <p className="text-sm text-gray-300 leading-relaxed">{String(report.executive_summary)}</p>
         </Section>
@@ -59,7 +59,7 @@ export default function FinalReport({ report }: Props) {
         </Section>
       )}
 
-      {report.rollback_guidance && (
+      {report.rollback_guidance ? (
         <Section title="Rollback Guidance">
           <p className="text-xs text-gray-300 leading-relaxed">{String(report.rollback_guidance)}</p>
         </Section>
