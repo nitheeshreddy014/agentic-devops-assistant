@@ -50,48 +50,16 @@ def get_llm(temperature: float = 0.1) -> Optional[BaseChatModel]:
 def _build_groq(settings, temperature: float) -> BaseChatModel:
     from langchain_groq import ChatGroq  # type: ignore[import]
 
-    # Try models in order of preference - fallback if one is unavailable
-    models_to_try = [
-        settings.llm_model,
-        "llama3-70b-8192",
-        "llama-3.1-70b-versatile",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768",
-        "gemma-7b-it",
-    ]
-    # Deduplicate while preserving order
-    seen = set()
-    models_to_try = [m for m in models_to_try if m and not (m in seen or seen.add(m))]
+    # Use configured model, fall back to llama3-70b-8192 if not set
+    model = settings.llm_model or "llama3-70b-8192"
 
-    last_exc = None
-    for model in models_to_try:
-        try:
-            logger.info(f"Trying Groq model: {model}")
-            llm = ChatGroq(
-                groq_api_key=settings.groq_api_key,
-                model_name=model,
-                temperature=temperature,
-                max_retries=1,
-            )
-            # Quick test to verify model is accessible
-            llm.invoke([{"role": "user", "content": "hi"}])
-            logger.info(f"Groq model ready: {model}")
-            return ChatGroq(
-                groq_api_key=settings.groq_api_key,
-                model_name=model,
-                temperature=temperature,
-                max_retries=settings.groq_max_retries,
-            )
-        except Exception as exc:
-            err = str(exc)
-            if "404" in err or "does not exist" in err or "not have access" in err:
-                logger.warning(f"Model {model} not available, trying next...")
-                last_exc = exc
-                continue
-            # Other errors (auth, network) - raise immediately
-            raise
-
-    raise RuntimeError(f"No Groq models available. Last error: {last_exc}")
+    logger.info(f"Initialising Groq LLM: model={model}")
+    return ChatGroq(
+        groq_api_key=settings.groq_api_key,
+        model_name=model,
+        temperature=temperature,
+        max_retries=settings.groq_max_retries,
+    )
 
 
 # ── Google Gemini (optional) ─────────────────────────────────────────────────
@@ -161,7 +129,22 @@ def invoke_with_retry(llm: BaseChatModel, messages, max_retries: int = 3, base_d
                 or "blocked" in err_str
             )
             is_network_err = "connection" in err_str or "timeout" in err_str or "unreachable" in err_str
+            is_model_404   = ("404" in err_str and "does not exist" in err_str) or "not have access" in err_str
 
+            if is_model_404:
+                # Try fallback model automatically
+                logger.warning(f"Model not available (404). Trying llama3-70b-8192 fallback.")
+                from langchain_groq import ChatGroq  # type: ignore[import]
+                try:
+                    fallback_llm = ChatGroq(
+                        groq_api_key=llm.groq_api_key if hasattr(llm, 'groq_api_key') else None,
+                        model_name="llama3-70b-8192",
+                        temperature=0.1,
+                        max_retries=2,
+                    )
+                    return fallback_llm.invoke(messages)
+                except Exception:
+                    raise exc
             if is_blocked:
                 logger.error(
                     "LLM request blocked by network/firewall (not retrying). "
@@ -175,7 +158,7 @@ def invoke_with_retry(llm: BaseChatModel, messages, max_retries: int = 3, base_d
                 delay = base_delay * (2 ** attempt)
                 logger.warning(
                     f"Groq rate limit hit (attempt {attempt + 1}/{max_retries}). "
-                    f"Retrying in {delay:.1f}s…"
+                    f"Retrying in {delay:.1f}s..."
                 )
                 time.sleep(delay)
             else:
