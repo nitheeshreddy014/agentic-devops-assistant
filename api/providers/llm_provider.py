@@ -47,46 +47,57 @@ def get_llm(temperature: float = 0.1) -> Optional[BaseChatModel]:
 
 # ── Groq ──────────────────────────────────────────────────────────────────────
 
-def _build_groq(settings, temperature: float) -> BaseChatModel:
-    from langchain_groq import ChatGroq  # type: ignore[import]
+def _get_working_groq_model(api_key: str) -> str:
+    """Query Groq /models endpoint to find first available model."""
+    import httpx
 
-    # Current valid Groq models (2025) in order of preference
-    GROQ_MODELS = [
+    PREFERRED = [
         "llama-3.3-70b-versatile",
         "llama-3.1-70b-versatile",
         "llama-3.1-8b-instant",
+        "llama3-groq-70b-8192-tool-use-preview",
         "gemma2-9b-it",
         "gemma-7b-it",
+        "mixtral-8x7b-32768",
     ]
 
-    # Use configured model as first choice, then fallback list
-    model = settings.llm_model or GROQ_MODELS[0]
-    if model not in GROQ_MODELS:
-        candidates = [model] + GROQ_MODELS
-    else:
-        candidates = [model] + [m for m in GROQ_MODELS if m != model]
+    try:
+        resp = httpx.get(
+            "https://api.groq.com/openai/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=8.0,
+        )
+        if resp.status_code == 200:
+            available = {m["id"] for m in resp.json().get("data", [])}
+            logger.info(f"Groq available models: {sorted(available)}")
+            for model in PREFERRED:
+                if model in available:
+                    logger.info(f"Selected Groq model: {model}")
+                    return model
+    except Exception as exc:
+        logger.warning(f"Could not query Groq models API: {exc}")
 
-    last_exc = None
-    for candidate in candidates:
-        try:
-            logger.info(f"Trying Groq model: {candidate}")
-            llm = ChatGroq(
-                groq_api_key=settings.groq_api_key,
-                model_name=candidate,
-                temperature=temperature,
-                max_retries=1,
-            )
-            logger.info(f"Groq LLM ready: {candidate}")
-            return llm
-        except Exception as exc:
-            err = str(exc).lower()
-            if any(k in err for k in ("404", "does not exist", "not have access", "decommission", "deprecated", "not supported")):
-                logger.warning(f"Model {candidate} unavailable, trying next...")
-                last_exc = exc
-                continue
-            raise
+    # If API query fails, return best guess
+    return "llama-3.1-70b-versatile"
 
-    raise RuntimeError(f"No working Groq model found. Last error: {last_exc}")
+
+def _build_groq(settings, temperature: float) -> BaseChatModel:
+    from langchain_groq import ChatGroq  # type: ignore[import]
+
+    api_key = settings.groq_api_key
+
+    # Dynamically discover which model works for this API key
+    model = _get_working_groq_model(api_key)
+    logger.info(f"Initialising Groq LLM: model={model}")
+
+    return ChatGroq(
+        groq_api_key=api_key,
+        model_name=model,
+        temperature=temperature,
+        max_retries=settings.groq_max_retries,
+    )
+
+
 
 
 # ── Google Gemini (optional) ─────────────────────────────────────────────────
