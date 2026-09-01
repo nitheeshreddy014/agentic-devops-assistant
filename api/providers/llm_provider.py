@@ -50,16 +50,43 @@ def get_llm(temperature: float = 0.1) -> Optional[BaseChatModel]:
 def _build_groq(settings, temperature: float) -> BaseChatModel:
     from langchain_groq import ChatGroq  # type: ignore[import]
 
-    # Use configured model, fall back to llama3-70b-8192 if not set
-    model = settings.llm_model or "llama3-70b-8192"
+    # Current valid Groq models (2025) in order of preference
+    GROQ_MODELS = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+        "gemma2-9b-it",
+        "gemma-7b-it",
+    ]
 
-    logger.info(f"Initialising Groq LLM: model={model}")
-    return ChatGroq(
-        groq_api_key=settings.groq_api_key,
-        model_name=model,
-        temperature=temperature,
-        max_retries=settings.groq_max_retries,
-    )
+    # Use configured model as first choice, then fallback list
+    model = settings.llm_model or GROQ_MODELS[0]
+    if model not in GROQ_MODELS:
+        candidates = [model] + GROQ_MODELS
+    else:
+        candidates = [model] + [m for m in GROQ_MODELS if m != model]
+
+    last_exc = None
+    for candidate in candidates:
+        try:
+            logger.info(f"Trying Groq model: {candidate}")
+            llm = ChatGroq(
+                groq_api_key=settings.groq_api_key,
+                model_name=candidate,
+                temperature=temperature,
+                max_retries=1,
+            )
+            logger.info(f"Groq LLM ready: {candidate}")
+            return llm
+        except Exception as exc:
+            err = str(exc).lower()
+            if any(k in err for k in ("404", "does not exist", "not have access", "decommission", "deprecated", "not supported")):
+                logger.warning(f"Model {candidate} unavailable, trying next...")
+                last_exc = exc
+                continue
+            raise
+
+    raise RuntimeError(f"No working Groq model found. Last error: {last_exc}")
 
 
 # ── Google Gemini (optional) ─────────────────────────────────────────────────
@@ -138,7 +165,7 @@ def invoke_with_retry(llm: BaseChatModel, messages, max_retries: int = 3, base_d
                 try:
                     fallback_llm = ChatGroq(
                         groq_api_key=llm.groq_api_key if hasattr(llm, 'groq_api_key') else None,
-                        model_name="llama3-70b-8192",
+                        model_name="llama-3.1-70b-versatile",
                         temperature=0.1,
                         max_retries=2,
                     )
