@@ -24,12 +24,10 @@ AGENT_BACKSTORY = (
 PHASE = "plan"
 
 try:
-try:
-        from crewai import Agent as CrewAIAgent  # type: ignore[import]
-except ImportError:
-    pass  # crewai optional on Vercel
+    from crewai import Agent as CrewAIAgent  # type: ignore[import]
     _CREWAI_AVAILABLE = True
 except ImportError:
+    CrewAIAgent = None
     _CREWAI_AVAILABLE = False
 
 
