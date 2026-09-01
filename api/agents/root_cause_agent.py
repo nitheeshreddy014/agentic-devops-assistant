@@ -24,7 +24,10 @@ AGENT_BACKSTORY = (
 PHASE = "root_cause"
 
 try:
-    from crewai import Agent as CrewAIAgent  # type: ignore[import]
+try:
+        from crewai import Agent as CrewAIAgent  # type: ignore[import]
+except ImportError:
+    pass  # crewai optional on Vercel
     _CREWAI_AVAILABLE = True
 except ImportError:
     _CREWAI_AVAILABLE = False
