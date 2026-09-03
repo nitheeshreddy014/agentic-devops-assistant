@@ -23,6 +23,8 @@ A production-style portfolio project demonstrating **agentic AI** for DevOps inc
 
 ## Architecture
 
+![Agentic DevOps Troubleshooting Assistant](docs/images/agentic_devops_architecture.png)
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         Next.js Frontend                            │

@@ -55,3 +55,9 @@ server.log
 backend.log
 uvicorn_test.log
 *.log
+
+# Push utility files
+push_output.txt
+push_via_api.py
+fix_*.py
+test_groq.py
