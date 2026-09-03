@@ -66,6 +66,7 @@ def _get_working_groq_model(api_key: str) -> str:
             "https://api.groq.com/openai/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=8.0,
+            verify=False,
         )
         if resp.status_code == 200:
             available = {m["id"] for m in resp.json().get("data", [])}
@@ -90,11 +91,17 @@ def _build_groq(settings, temperature: float) -> BaseChatModel:
     model = _get_working_groq_model(api_key)
     logger.info(f"Initialising Groq LLM: model={model}")
 
+    import httpx
+    http_client = httpx.Client(verify=False)
+    async_http_client = httpx.AsyncClient(verify=False)
+
     return ChatGroq(
         groq_api_key=api_key,
         model_name=model,
         temperature=temperature,
         max_retries=settings.groq_max_retries,
+        http_client=http_client,
+        http_async_client=async_http_client,
     )
 
 
