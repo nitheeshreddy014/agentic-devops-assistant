@@ -1,5 +1,7 @@
 # Agentic DevOps Troubleshooting Assistant
 
+🚀 **Live Demo:** [https://agentic-devops-assistant-y1o8-3cq1jol3y-nitheesh1.vercel.app/](https://agentic-devops-assistant-y1o8-3cq1jol3y-nitheesh1.vercel.app/)
+
 A production-style portfolio project demonstrating **agentic AI** for DevOps incident investigation. This is **not** a chatbot or LLM wrapper — it uses LangGraph orchestration, CrewAI specialist agents, LangChain/Groq integration, BM25 RAG, and MCP-compatible stateless tools to conduct structured, evidence-based, iterative investigations with human-controlled remediation.
 
 ---
@@ -203,6 +205,8 @@ Backend tests cover:
 ---
 
 ## Vercel Deployment
+
+✅ **This project is live at:** [https://agentic-devops-assistant-y1o8-3cq1jol3y-nitheesh1.vercel.app/](https://agentic-devops-assistant-y1o8-3cq1jol3y-nitheesh1.vercel.app/)
 
 1. **Push** this repository to GitHub.
 2. Go to [vercel.com](https://vercel.com) → **Add New Project** → import the GitHub repo.
