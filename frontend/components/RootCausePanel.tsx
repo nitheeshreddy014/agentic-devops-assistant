@@ -1,71 +1,125 @@
 'use client';
 import { useState } from 'react';
-import type { RootCause, Citation } from '@/lib/types';
+import type { ProbableCause, RunbookCitation } from '@/lib/types';
 
-function CopyBtn({ text }: { text: string }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <button onClick={() => { navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000); }}
-      className="shrink-0 text-xs px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors ml-2">
-      {ok ? '✓' : '⧉'}
-    </button>
-  );
+interface Props {
+  causes: ProbableCause[];
+  citations: RunbookCitation[];
+  onConfirm?: (cause: ProbableCause) => void;
 }
 
-export default function RootCausePanel({ causes, citations }: { causes: RootCause[]; citations: Citation[] }) {
+const CONF_CLS = (c: number) =>
+  c >= 0.75 ? 'bg-green-500' : c >= 0.5 ? 'bg-yellow-500' : 'bg-red-500';
+
+export default function RootCausePanel({ causes, citations, onConfirm }: Props) {
+  const [minConf,   setMinConf]   = useState(0);
+  const [confirmed, setConfirmed] = useState<number | null>(null);
+  const [openCite,  setOpenCite]  = useState<string | null>(null);
+
+  if (!causes || causes.length === 0) return null;
+
+  const visible     = causes.filter(c => c.confidence >= minConf);
+  const getCitation = (ref: string) =>
+    citations.find(c => c.id === ref || c.title?.toLowerCase().includes(ref.toLowerCase()));
+
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-      <h3 className="text-lg font-semibold text-white mb-4">🎯 Probable Root Causes</h3>
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h3 className="text-lg font-semibold text-white">🎯 Probable Root Causes</h3>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400 whitespace-nowrap">
+            Min confidence: {Math.round(minConf * 100)}%
+          </label>
+          <input type="range" min={0} max={0.9} step={0.05} value={minConf}
+            onChange={e => setMinConf(Number(e.target.value))}
+            className="w-24 accent-blue-500" aria-label="Minimum confidence filter" />
+        </div>
+      </div>
       <div className="space-y-4">
-        {causes.map((c) => (
-          <div key={c.rank} className="border border-gray-700/70 rounded-lg p-4 bg-gray-800/30">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex gap-2 flex-1 min-w-0">
-                <span className="text-gray-500 font-mono text-xs shrink-0 mt-0.5">#{c.rank}</span>
-                <h4 className="text-white font-medium text-sm">{c.cause}</h4>
+        {visible.map((cause, idx) => (
+          <div key={idx} className={`border rounded-xl p-4 space-y-3 transition-colors
+            ${confirmed === cause.rank ? 'border-green-600 bg-green-900/15' : 'border-gray-700 bg-gray-800/40'}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-xs text-gray-500 font-mono">#{cause.rank}</span>
+                  <h4 className="text-sm font-semibold text-white">{cause.cause}</h4>
+                  {confirmed === cause.rank && (
+                    <span className="text-xs text-green-400 bg-green-900/30 border border-green-700/40 px-2 py-0.5 rounded">✓ Confirmed</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 max-w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${CONF_CLS(cause.confidence)}`}
+                      style={{ width: `${cause.confidence * 100}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-400">{Math.round(cause.confidence * 100)}%</span>
+                </div>
               </div>
-              <span className={`text-xs font-bold shrink-0 ml-3 ${c.confidence >= 0.7 ? 'text-green-400' : c.confidence >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
-                {Math.round(c.confidence * 100)}%
-              </span>
+              <button onClick={() => { setConfirmed(cause.rank); onConfirm?.(cause); }}
+                disabled={confirmed !== null}
+                className={`shrink-0 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors
+                  ${confirmed === cause.rank
+                    ? 'border-green-600 text-green-400 bg-green-900/30 cursor-default'
+                    : 'border-gray-600 text-gray-400 hover:border-green-500 hover:text-green-400 hover:bg-green-900/20'}`}>
+                {confirmed === cause.rank ? '✓ Confirmed' : 'This was it →'}
+              </button>
             </div>
-            <div className="h-1.5 bg-gray-700 rounded-full mb-3">
-              <div className={`h-full rounded-full ${c.confidence >= 0.7 ? 'bg-green-500' : c.confidence >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                style={{ width: `${c.confidence * 100}%` }} />
-            </div>
-            {c.supporting_evidence.length > 0 && (
-              <div className="mb-2">
-                <p className="text-xs font-medium text-green-400 mb-1">✓ Supporting Evidence</p>
-                {c.supporting_evidence.map((e, i) => <p key={i} className="text-xs text-gray-300 ml-2">• {e}</p>)}
+            {cause.supporting_evidence.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Supporting evidence</p>
+                {cause.supporting_evidence.map((e, j) => (
+                  <p key={j} className="text-xs text-green-300/80 flex gap-1.5"><span className="text-green-600">+</span>{e}</p>
+                ))}
               </div>
             )}
-            {c.contradicting_evidence.length > 0 && (
-              <div className="mb-2">
-                <p className="text-xs font-medium text-red-400 mb-1">✗ Contradicting</p>
-                {c.contradicting_evidence.map((e, i) => <p key={i} className="text-xs text-gray-300 ml-2">• {e}</p>)}
+            {cause.contradicting_evidence.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Contradicting evidence</p>
+                {cause.contradicting_evidence.map((e, j) => (
+                  <p key={j} className="text-xs text-red-300/80 flex gap-1.5"><span className="text-red-600">−</span>{e}</p>
+                ))}
               </div>
             )}
-            {c.confirmation_check && (
-              <div className="mt-2 flex items-center bg-gray-800 rounded p-2 gap-2">
-                <span className="text-gray-400 text-xs shrink-0">Confirm:</span>
-                <code className="text-yellow-300 text-xs flex-1 break-all">{c.confirmation_check}</code>
-                <CopyBtn text={c.confirmation_check} />
+            {cause.confirmation_check && (
+              <div className="bg-gray-950 rounded border border-gray-700 px-3 py-2">
+                <p className="text-xs text-gray-500 mb-1">Confirmation check</p>
+                <code className="text-green-300 text-xs font-mono">{cause.confirmation_check}</code>
+                {cause.expected_result && <p className="text-xs text-gray-400 mt-1">Expected: {cause.expected_result}</p>}
               </div>
             )}
+            {cause.citations && cause.citations.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {cause.citations.map((ref, j) => {
+                  const cite = getCitation(ref);
+                  return (
+                    <button key={j} onClick={() => setOpenCite(openCite === ref ? null : ref)}
+                      className="text-xs px-2 py-0.5 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/20 transition-colors">
+                      📚 {cite?.title ?? ref}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {cause.citations?.map(ref => {
+              const cite = getCitation(ref);
+              return openCite === ref && cite ? (
+                <div key={ref} className="bg-gray-800 border border-blue-700/30 rounded-lg p-3 text-xs text-gray-300 space-y-1">
+                  <p className="font-semibold text-blue-300">{cite.title}</p>
+                  {cite.content && <p className="text-gray-400 leading-relaxed">{cite.content}</p>}
+                  {cite.url && <a href={cite.url} target="_blank" rel="noopener noreferrer"
+                    className="text-blue-400 underline">Open Runbook ↗</a>}
+                </div>
+              ) : null;
+            })}
           </div>
         ))}
+        {visible.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-4">
+            No causes at {Math.round(minConf * 100)}%+ confidence. Lower the slider above.
+          </p>
+        )}
       </div>
-      {citations.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
-          <p className="text-xs font-medium text-gray-400 mb-2">📚 Runbook Citations</p>
-          <div className="flex flex-wrap gap-2">
-            {citations.map((c, i) => (
-              <span key={i} title={c.snippet ?? ''} className="text-xs bg-gray-800 text-blue-300 px-2 py-1 rounded border border-gray-600">
-                {c.filename}§{c.section}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

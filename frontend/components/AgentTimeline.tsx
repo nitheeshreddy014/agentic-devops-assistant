@@ -1,37 +1,63 @@
 'use client';
+import { useState } from 'react';
 import type { AgentMessage } from '@/lib/types';
 
-const ICONS: Record<string, string> = { running: '⟳', complete: '✓', error: '✗', skipped: '–' };
-const COLORS: Record<string, string> = {
-  running: 'text-blue-400', complete: 'text-green-400',
-  error: 'text-red-400',    skipped: 'text-gray-500',
+interface Props { messages: AgentMessage[] }
+
+const AGENT_ICONS: Record<string, string> = {
+  triage: '🔍', planner: '📋', log_analysis: '📊',
+  rag_knowledge: '📚', root_cause: '🎯',
+  troubleshooting: '🔧', safety_reviewer: '🛡', report: '📝',
+};
+const STATUS_CLS: Record<string, string> = {
+  running: 'text-blue-400 animate-pulse', complete: 'text-green-400',
+  error: 'text-red-400', pending: 'text-gray-500',
+};
+const STATUS_ICON: Record<string, string> = {
+  running: '⟳', complete: '✓', error: '✗', pending: '○',
 };
 
-interface Props { messages: AgentMessage[]; isLoading?: boolean }
-
-export default function AgentTimeline({ messages, isLoading }: Props) {
+export default function AgentTimeline({ messages }: Props) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  if (!messages || messages.length === 0) return null;
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-        🤖 Agent Timeline
-        {isLoading && <span className="text-blue-400 text-xs animate-pulse">● investigating…</span>}
-      </h3>
-      {messages.length === 0 && <p className="text-xs text-gray-500">Waiting for agents to start…</p>}
-      <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-        {messages.map((m, i) => (
-          <div key={i} className="flex items-start gap-2 text-xs">
-            <span className={`mt-0.5 w-4 shrink-0 font-mono ${COLORS[m.status] ?? 'text-gray-400'}`}>
-              {ICONS[m.status] ?? '?'}
-            </span>
-            <div className="flex-1 min-w-0">
-              <span className="text-blue-300 font-medium">{m.agent_name}</span>
-              <span className="text-gray-600 mx-1">·</span>
-              <span className="text-gray-300">{m.message}</span>
-            </div>
-            <span className="text-gray-600 shrink-0">{new Date(m.timestamp).toLocaleTimeString()}</span>
-          </div>
-        ))}
-      </div>
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-4" role="log" aria-label="Agent activity timeline">
+      <h3 className="text-sm font-semibold text-gray-300 mb-3">🤖 Agent Activity</h3>
+      <ol className="space-y-1.5">
+        {messages.map((m, i) => {
+          const key  = Object.keys(AGENT_ICONS).find(k => m.agent.toLowerCase().includes(k)) ?? '';
+          const icon = AGENT_ICONS[key] ?? '🤖';
+          const st   = m.status ?? 'complete';
+          const dur  = m.duration_ms != null ? `${(m.duration_ms / 1000).toFixed(1)}s` : null;
+          const open = expanded === i;
+          return (
+            <li key={i}>
+              <button onClick={() => setExpanded(open ? null : i)} aria-expanded={open}
+                className="w-full flex items-start gap-3 text-left hover:bg-gray-800/50 rounded-lg px-2 py-1.5 transition-colors group">
+                <span className="text-lg leading-5 shrink-0 mt-0.5">{icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-medium text-white">{m.agent}</span>
+                    {dur && <span className="text-xs text-gray-600">{dur}</span>}
+                    <span className={`text-xs ml-auto ${STATUS_CLS[st] ?? STATUS_CLS.complete}`}>
+                      {STATUS_ICON[st] ?? '✓'} {st}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 truncate mt-0.5 group-hover:text-gray-300">{m.message}</p>
+                </div>
+              </button>
+              {open && (
+                <div className="ml-10 mt-1 mb-2 p-3 bg-gray-800 rounded-lg border border-gray-700 text-xs text-gray-300 whitespace-pre-wrap break-words">
+                  {m.message}
+                  {st === 'error' && (m as any).error && (
+                    <p className="mt-2 text-red-300 border-t border-red-700/40 pt-2">Error: {(m as any).error}</p>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

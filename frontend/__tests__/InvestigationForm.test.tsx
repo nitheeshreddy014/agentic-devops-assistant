@@ -13,8 +13,10 @@ describe('InvestigationForm', () => {
 
   it('renders required fields', () => {
     render(<InvestigationForm onSubmit={noop} isLoading={false} />);
-    expect(screen.getByPlaceholderText(/Problem Title/i)).toBeTruthy();
-    expect(screen.getByText(/Start Investigation/i)).toBeTruthy();
+    // Title input uses a descriptive placeholder, not "Problem Title"
+    expect(screen.getByPlaceholderText(/CrashLoopBackOff/i)).toBeTruthy();
+    // Both <h2> and <button> contain "Start Investigation" — use getAllByText
+    expect(screen.getAllByText(/Start Investigation/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Technology/i)).toBeTruthy();
     expect(screen.getByText(/Environment/i)).toBeTruthy();
   });
@@ -45,8 +47,8 @@ describe('InvestigationForm', () => {
 
   it('shows loading spinner when isLoading=true', () => {
     render(<InvestigationForm onSubmit={noop} isLoading={true} />);
-    // Button should be disabled and show spinner svg
-    const btn = screen.getByRole('button', { name: /investigating/i });
+    // Submit button is disabled and aria-label contains 'investigation'
+    const btn = screen.getByRole('button', { name: /Start investigation/i });
     expect(btn).toBeDisabled();
   });
 });
