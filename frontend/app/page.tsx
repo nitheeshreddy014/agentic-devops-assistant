@@ -29,7 +29,7 @@ import AgentTimeline     from '@/components/AgentTimeline';
 import FinalReport       from '@/components/FinalReport';
 import EscalationPanel   from '@/components/EscalationPanel';
 import HistoryDrawer     from '@/components/HistoryDrawer';
-import GroqStatus        from '@/components/GroqStatus';
+
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function getErrorMessage(err: unknown): string {
@@ -62,8 +62,7 @@ export default function Home() {
   const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
   const [isLoading,     setIsLoading]     = useState(false);
   const [error,         setError]         = useState<string | null>(null);
-  const [groqOk,        setGroqOk]        = useState<boolean | null>(null);
-  const [groqModel,     setGroqModel]     = useState<string | undefined>(undefined);
+
   const [historyOpen,   setHistoryOpen]   = useState(false);
   const [resolved,      setResolved]      = useState(false);
   const [prefill,       setPrefill]       = useState<Partial<StartInvestigationRequest> | undefined>(undefined);
@@ -78,12 +77,8 @@ export default function Home() {
     if (saved) setInvestigation(saved);
   }, []);
 
-  // Health check on mount
-  useEffect(() => {
-    checkHealth()
-      .then(h => { setGroqOk(h.groq_configured); setGroqModel(h.model); })
-      .catch(() => setGroqOk(false));
-  }, []);
+  // Health check on mount — only used internally, not shown to user
+  useEffect(() => { checkHealth().catch(() => {}); }, []);
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -247,7 +242,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {groqOk !== null && <GroqStatus configured={groqOk} model={groqModel} />}
+
             <button
               onClick={() => setHistoryOpen(true)}
               title="Investigation History (Cmd+K)"
