@@ -16,7 +16,7 @@ import type { InvestigationResponse, StartInvestigationRequest, StepFeedback } f
 import { startInvestigation, continueInvestigation, checkHealth } from '@/lib/api';
 import {
   saveActiveSession, loadActiveSession, clearActiveSession,
-  saveToHistory, markHistoryResolved,
+  saveToHistory, markHistoryResolved, clearFormDraft,
 } from '@/lib/storage';
 import { useNotification }      from '@/lib/hooks/useNotification';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
@@ -218,6 +218,7 @@ export default function Home() {
     setStuckIter(0);
     setPrefill(undefined);
     clearActiveSession();
+    clearFormDraft();   // prevent old form data reloading on remount
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
