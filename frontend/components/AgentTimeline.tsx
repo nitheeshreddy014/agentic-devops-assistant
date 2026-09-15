@@ -20,11 +20,28 @@ const STATUS_ICON: Record<string, string> = {
 export default function AgentTimeline({ messages }: Props) {
   const [expanded, setExpanded] = useState<number | null>(null);
   if (!messages || messages.length === 0) return null;
+
+  // Deduplicate: for each agent+phase pair keep only the LAST message.
+  // The backend appends running → (error →) complete in sequence, so the last
+  // entry for a given agent+phase is always the terminal state. Showing every
+  // intermediate "running" entry produces permanently-stuck spinning rows.
+  const deduped: AgentMessage[] = [];
+  const seen = new Map<string, number>(); // key → index in deduped
+  for (const m of messages) {
+    const key = `${m.agent_name ?? m.agent}::${m.phase}`;
+    if (seen.has(key)) {
+      deduped[seen.get(key)!] = m; // overwrite with newer entry
+    } else {
+      seen.set(key, deduped.length);
+      deduped.push(m);
+    }
+  }
+
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-4" role="log" aria-label="Agent activity timeline">
       <h3 className="text-sm font-semibold text-gray-300 mb-3">🤖 Agent Activity</h3>
       <ol className="space-y-1.5">
-        {messages.map((m, i) => {
+        {deduped.map((m, i) => {
           // agent field may be absent in older backend responses — fall back to agent_name
           const agentLabel = m.agent ?? m.agent_name ?? '';
           const key  = Object.keys(AGENT_ICONS).find(k => agentLabel.toLowerCase().includes(k)) ?? '';
