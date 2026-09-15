@@ -25,7 +25,9 @@ export default function AgentTimeline({ messages }: Props) {
       <h3 className="text-sm font-semibold text-gray-300 mb-3">🤖 Agent Activity</h3>
       <ol className="space-y-1.5">
         {messages.map((m, i) => {
-          const key  = Object.keys(AGENT_ICONS).find(k => m.agent.toLowerCase().includes(k)) ?? '';
+          // agent field may be absent in older backend responses — fall back to agent_name
+          const agentLabel = m.agent ?? m.agent_name ?? '';
+          const key  = Object.keys(AGENT_ICONS).find(k => agentLabel.toLowerCase().includes(k)) ?? '';
           const icon = AGENT_ICONS[key] ?? '🤖';
           const st   = m.status ?? 'complete';
           const dur  = m.duration_ms != null ? `${(m.duration_ms / 1000).toFixed(1)}s` : null;
@@ -37,7 +39,7 @@ export default function AgentTimeline({ messages }: Props) {
                 <span className="text-lg leading-5 shrink-0 mt-0.5">{icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-medium text-white">{m.agent}</span>
+                    <span className="text-xs font-medium text-white">{agentLabel}</span>
                     {dur && <span className="text-xs text-gray-600">{dur}</span>}
                     <span className={`text-xs ml-auto ${STATUS_CLS[st] ?? STATUS_CLS.complete}`}>
                       {STATUS_ICON[st] ?? '✓'} {st}

@@ -139,28 +139,50 @@ def _slim_state(state: dict) -> dict:
 
 
 def _state_to_dict(state: dict, req_id: str, token: str) -> Dict[str, Any]:
+    # Normalise agent_messages: ensure both `agent` and `agent_name` fields are
+    # present so the frontend AgentTimeline can use either without crashing.
+    raw_messages = state.get("agent_messages", [])
+    agent_messages = []
+    for msg in raw_messages:
+        if isinstance(msg, dict):
+            m = dict(msg)
+            # backend stores agent_name; frontend also expects `agent`
+            m.setdefault("agent", m.get("agent_name", ""))
+            m.setdefault("agent_name", m.get("agent", ""))
+            agent_messages.append(m)
+        else:
+            agent_messages.append(msg)
+
+    flagged = state.get("flagged_items", [])
+
+    # Derive status from whether a final report has been produced
+    has_report = bool(state.get("report"))
+    status = "completed" if has_report else "in_progress"
+
     return {
-        "session_id":          state.get("session_id", ""),
-        "request_id":          req_id,
-        "phase":               state.get("current_phase", "complete"),
-        "issue_category":      state.get("issue_category", "unknown"),
-        "severity":            state.get("severity", "unknown"),
-        "missing_info":        state.get("missing_info", []),
-        "affected_services":   state.get("affected_services", []),
-        "error_codes":         state.get("error_codes", []),
-        "agent_messages":      state.get("agent_messages", []),
-        "diagnostic_plan":     state.get("diagnostic_plan", []),
-        "log_findings":        state.get("log_findings", []),
-        "config_findings":     state.get("config_findings", []),
-        "runbook_citations":   state.get("runbook_citations", []),
-        "probable_causes":     state.get("probable_causes", []),
-        "diagnostic_steps":    state.get("diagnostic_steps", []),
-        "recommended_fixes":   state.get("recommended_fixes", []),
-        "flagged_items":       state.get("flagged_items", []),
-        "report":              state.get("report") or {},
-        "investigation_token": token,
-        "llm_configured":      settings.llm_configured,
-        "iteration":           int(state.get("iteration", 1)),
+        "session_id":               state.get("session_id", ""),
+        "request_id":               req_id,
+        "phase":                    state.get("current_phase", "complete"),
+        "status":                   status,
+        "issue_category":           state.get("issue_category", "unknown"),
+        "severity":                 state.get("severity", "unknown"),
+        "missing_info":             state.get("missing_info", []),
+        "affected_services":        state.get("affected_services", []),
+        "error_codes":              state.get("error_codes", []),
+        "agent_messages":           agent_messages,
+        "diagnostic_plan":          state.get("diagnostic_plan", []),
+        "log_findings":             state.get("log_findings", []),
+        "config_findings":          state.get("config_findings", []),
+        "runbook_citations":        state.get("runbook_citations", []),
+        "probable_causes":          state.get("probable_causes", []),
+        "diagnostic_steps":         state.get("diagnostic_steps", []),
+        "recommended_fixes":        state.get("recommended_fixes", []),
+        "flagged_items":            flagged,
+        "flagged_for_human_review": flagged,   # alias expected by frontend
+        "report":                   state.get("report") or {},
+        "investigation_token":      token,
+        "llm_configured":           settings.llm_configured,
+        "iteration":                int(state.get("iteration", 1)),
     }
 
 
